@@ -7,8 +7,10 @@ import BidDetails from './components/BidDetails';
 import FilterPanel from './components/FilterPanel';
 import Stats from './components/Stats';
 
-// Use droplet IP for API (your backend server)
-const API_URL = 'http://147.182.179.47:3000/api';
+// Use Vercel API proxy for HTTPS sites, direct API for localhost
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:3000/api'
+  : '/api';
 
 function App() {
   const [bids, setBids] = useState([]);
