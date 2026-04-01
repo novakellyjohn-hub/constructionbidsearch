@@ -1,58 +1,43 @@
-// Vercel catch-all API proxy
-const BACKEND_URL = 'http://147.182.179.47:3000/api';
-
+// Simple API proxy for Vercel
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   try {
-    const { path } = req.query;
-    const pathString = Array.isArray(path) ? path.join('/') : path || '';
+    const { path = [] } = req.query;
+    const pathStr = Array.isArray(path) ? path.join('/') : path;
     
-    // Build query string from remaining query params
-    const queryParams = new URLSearchParams();
+    // Build full URL
+    const backendUrl = `http://147.182.179.47:3000/api/${pathStr}`;
+    const fullUrl = new URL(backendUrl);
+    
+    // Add query params
     Object.keys(req.query).forEach(key => {
       if (key !== 'path') {
-        const value = req.query[key];
-        if (Array.isArray(value)) {
-          value.forEach(v => queryParams.append(key, v));
-        } else {
-          queryParams.append(key, value);
-        }
+        fullUrl.searchParams.append(key, req.query[key]);
       }
     });
-    
-    const queryString = queryParams.toString();
-    const url = `${BACKEND_URL}/${pathString}${queryString ? '?' + queryString : ''}`;
 
-    const fetchOptions = {
+    console.log(`Proxying ${req.method} ${fullUrl.toString()}`);
+
+    const response = await fetch(fullUrl.toString(), {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        ...req.headers,
       },
-    };
+      body: req.method !== 'GET' && req.body ? JSON.stringify(req.body) : undefined,
+    });
 
-    if (['POST', 'PUT'].includes(req.method) && req.body) {
-      fetchOptions.body = JSON.stringify(req.body);
-    }
-
-    const response = await fetch(url, fetchOptions);
     const data = await response.json();
-
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('Proxy error:', error.message);
-    res.status(500).json({ 
-      error: error.message || 'API request failed'
-    });
+    console.error('Proxy error:', error);
+    res.status(500).json({ error: error.message });
   }
 }
