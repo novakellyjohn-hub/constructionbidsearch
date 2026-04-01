@@ -1,6 +1,4 @@
 // Vercel catch-all API proxy
-const axios = require('axios');
-
 const BACKEND_URL = 'http://147.182.179.47:3000/api';
 
 export default async function handler(req, res) {
@@ -17,36 +15,44 @@ export default async function handler(req, res) {
 
   try {
     const { path } = req.query;
-    const pathString = Array.isArray(path) ? path.join('/') : path;
-    const queryString = new URLSearchParams(req.query).toString();
+    const pathString = Array.isArray(path) ? path.join('/') : path || '';
     
+    // Build query string from remaining query params
+    const queryParams = new URLSearchParams();
+    Object.keys(req.query).forEach(key => {
+      if (key !== 'path') {
+        const value = req.query[key];
+        if (Array.isArray(value)) {
+          value.forEach(v => queryParams.append(key, v));
+        } else {
+          queryParams.append(key, value);
+        }
+      }
+    });
+    
+    const queryString = queryParams.toString();
     const url = `${BACKEND_URL}/${pathString}${queryString ? '?' + queryString : ''}`;
 
-    let response;
-    switch (req.method) {
-      case 'GET':
-        response = await axios.get(url);
-        break;
-      case 'POST':
-        response = await axios.post(url, req.body);
-        break;
-      case 'PUT':
-        response = await axios.put(url, req.body);
-        break;
-      case 'DELETE':
-        response = await axios.delete(url);
-        break;
-      default:
-        res.status(405).json({ error: 'Method not allowed' });
-        return;
+    const fetchOptions = {
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...req.headers,
+      },
+    };
+
+    if (['POST', 'PUT'].includes(req.method) && req.body) {
+      fetchOptions.body = JSON.stringify(req.body);
     }
 
-    res.status(response.status).json(response.data);
+    const response = await fetch(url, fetchOptions);
+    const data = await response.json();
+
+    res.status(response.status).json(data);
   } catch (error) {
     console.error('Proxy error:', error.message);
-    res.status(error.response?.status || 500).json({ 
-      error: error.message || 'API request failed',
-      details: error.response?.data
+    res.status(500).json({ 
+      error: error.message || 'API request failed'
     });
   }
 }
